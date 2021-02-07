@@ -1699,7 +1699,6 @@ private:
     {
         if (audioUnit != nullptr)
         {
-           #if JUCE_MAC
             if (producesMidiMessages)
             {
                 AUMIDIOutputCallbackStruct info;
@@ -1711,7 +1710,6 @@ private:
                 producesMidiMessages = (AudioUnitSetProperty (audioUnit, kAudioUnitProperty_MIDIOutputCallback,
                                                               kAudioUnitScope_Global, 0, &info, sizeof (info)) == noErr);
             }
-           #endif
 
             {
                 HostCallbackInfo info;
@@ -2223,7 +2221,6 @@ private:
 
     bool canProduceMidiOutput()
     {
-       #if JUCE_MAC
         UInt32 dataSize = 0;
         Boolean isWritable = false;
 
@@ -2243,9 +2240,6 @@ private:
         }
 
         return false;
-       #else
-        return false;
-       #endif
     }
 
     bool supportsMPE() const override
