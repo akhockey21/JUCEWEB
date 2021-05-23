@@ -273,6 +273,9 @@ public:
         ignoreUnused (owner);
 
         WKWebViewConfiguration* config = [[WKWebViewConfiguration alloc] init];
+       #if JUCE_DEBUG
+        [config.preferences setValue:@YES forKey:@"developerExtrasEnabled"];
+       #endif
 
        #if JUCE_MAC
         auto frame = NSMakeRect (0, 0, 100.0f, 100.0f);
