@@ -152,6 +152,8 @@ struct WebViewDelegateClass  : public ObjCClass<NSObject>
         addMethod (@selector (webView:didFailNavigation:withError:),                      didFailNavigation,               "v@:@@@");
         addMethod (@selector (webView:didFailProvisionalNavigation:withError:),           didFailProvisionalNavigation,    "v@:@@@");
 
+        addMethod (@selector (userContentController:didReceiveScriptMessage:),            didReceiveScriptMessage,         "v@:@@");
+
        #if WKWEBVIEW_WEBVIEWDIDCLOSE_SUPPORTED
         addMethod (@selector (webViewDidClose:),                                          webViewDidClose,                 "v@:@");
        #endif
@@ -205,6 +207,12 @@ private:
     static void didFailProvisionalNavigation (id self, SEL, WKWebView*, WKNavigation*, NSError* error)
     {
         displayError (getOwner (self), error);
+    }
+    
+    static void didReceiveScriptMessage (id self, SEL, WKUserContentController*, WKScriptMessage* message)
+    {
+        // TODO error handling/handle different types
+        getOwner (self)->scriptMessageReceived (nsDictionaryToVar (message.body));
     }
 
    #if WKWEBVIEW_WEBVIEWDIDCLOSE_SUPPORTED
@@ -271,8 +279,16 @@ public:
     Pimpl (WebBrowserComponent* owner)
     {
         ignoreUnused (owner);
+        
+        static WebViewDelegateClass cls;
+        webViewDelegate = [cls.createInstance() init];
+        WebViewDelegateClass::setOwner (webViewDelegate, owner);
+
+        WKUserContentController *userContentController = [[WKUserContentController alloc] init];
+        [userContentController addScriptMessageHandler: webViewDelegate name: @"juce"];
 
         WKWebViewConfiguration* config = [[WKWebViewConfiguration alloc] init];
+        config.userContentController = userContentController;
        #if JUCE_DEBUG
         [config.preferences setValue:@YES forKey:@"developerExtrasEnabled"];
        #endif
@@ -290,10 +306,6 @@ public:
         webView = [[WKWebView alloc] initWithFrame: frame
                                      configuration: config];
        #endif
-
-        static WebViewDelegateClass cls;
-        webViewDelegate = [cls.createInstance() init];
-        WebViewDelegateClass::setOwner (webViewDelegate, owner);
 
         [webView setNavigationDelegate: webViewDelegate];
         [webView setUIDelegate:         webViewDelegate];

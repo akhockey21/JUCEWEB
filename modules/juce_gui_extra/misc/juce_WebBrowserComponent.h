@@ -126,6 +126,9 @@ public:
      */
     virtual void newWindowAttemptingToLoad (const String& newURL)   { ignoreUnused (newURL); }
 
+    /** TODO Docs */
+    virtual void scriptMessageReceived (const juce::var messageBody) { ignoreUnused (messageBody); }
+
     //==============================================================================
     /** @internal */
     void paint (Graphics&) override;
