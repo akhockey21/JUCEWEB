@@ -2,7 +2,7 @@
   ==============================================================================
 
    This file is part of the JUCE library.
-   Copyright (c) 2017 - ROLI Ltd.
+   Copyright (c) 2020 - Raw Material Software Limited
 
    JUCE is an open source library subject to commercial or open-source
    licensing.
@@ -30,12 +30,8 @@ MidiOutput::MidiOutput (const String& deviceName, const String& deviceIdentifier
 
 void MidiOutput::sendBlockOfMessagesNow (const MidiBuffer& buffer)
 {
-    MidiBuffer::Iterator i (buffer);
-    MidiMessage message;
-    int samplePosition; // Note: Not actually used, so no need to initialise.
-
-    while (i.getNextEvent (message, samplePosition))
-        sendMessageNow (message);
+    for (const auto metadata : buffer)
+        sendMessageNow (metadata.getMessage());
 }
 
 void MidiOutput::sendBlockOfMessages (const MidiBuffer& buffer,
@@ -50,13 +46,10 @@ void MidiOutput::sendBlockOfMessages (const MidiBuffer& buffer,
 
     auto timeScaleFactor = 1000.0 / samplesPerSecondForBuffer;
 
-    const uint8* data;
-    int len, time;
-
-    for (MidiBuffer::Iterator i (buffer); i.getNextEvent (data, len, time);)
+    for (const auto metadata : buffer)
     {
-        auto eventTime = millisecondCounterToStartAt + timeScaleFactor * time;
-        auto* m = new PendingMessage (data, len, eventTime);
+        auto eventTime = millisecondCounterToStartAt + timeScaleFactor * metadata.samplePosition;
+        auto* m = new PendingMessage (metadata.data, metadata.numBytes, eventTime);
 
         const ScopedLock sl (lock);
 
@@ -156,117 +149,5 @@ void MidiOutput::run()
 
     clearAllPendingMessages();
 }
-
-#if JUCE_UNIT_TESTS
- class MidiDevicesUnitTests  : public UnitTest
- {
- public:
-     MidiDevicesUnitTests() : UnitTest ("MidiInput/MidiOutput", "MIDI/MPE")  {}
-
-     void runTest() override
-     {
-         beginTest ("default device (input)");
-         {
-             auto devices = MidiInput::getAvailableDevices();
-             auto defaultDevice = MidiInput::getDefaultDevice();
-
-             if (devices.size() == 0)
-                 expect (defaultDevice == MidiDeviceInfo());
-             else
-                 expect (devices.contains (defaultDevice));
-         }
-
-         beginTest ("default device (output)");
-         {
-             auto devices = MidiOutput::getAvailableDevices();
-             auto defaultDevice = MidiOutput::getDefaultDevice();
-
-             if (devices.size() == 0)
-                 expect (defaultDevice == MidiDeviceInfo());
-             else
-                 expect (devices.contains (defaultDevice));
-         }
-
-        #if JUCE_MAC || JUCE_LINUX || JUCE_IOS
-         String testDeviceName  ("TestDevice");
-         String testDeviceName2 ("TestDevice2");
-
-         struct MessageCallbackHandler  : public MidiInputCallback
-         {
-             void handleIncomingMidiMessage (MidiInput* source, const MidiMessage& message) override
-             {
-                 const ScopedLock sl (messageLock);
-
-                 messageSource = source;
-                 messageReceived = message;
-             }
-
-             MidiInput* messageSource = nullptr;
-             MidiMessage messageReceived;
-             CriticalSection messageLock;
-         };
-
-         MessageCallbackHandler handler;
-
-         beginTest ("create device (input)");
-         {
-             std::unique_ptr<MidiInput> device (MidiInput::createNewDevice (testDeviceName, &handler));
-
-             expect (device.get() != nullptr);
-             expect (device->getName() == testDeviceName);
-
-             device->setName (testDeviceName2);
-             expect (device->getName() == testDeviceName2);
-         }
-
-         beginTest ("create device (output)");
-         {
-             std::unique_ptr<MidiOutput> device (MidiOutput::createNewDevice (testDeviceName));
-
-             expect (device.get() != nullptr);
-             expect (device->getName() == testDeviceName);
-         }
-
-        #if JUCE_MODAL_LOOPS_PERMITTED
-         auto testMessage = MidiMessage::noteOn (5, 12, (uint8) 51);
-
-         beginTest ("send messages");
-         {
-             std::unique_ptr<MidiInput> midiInput (MidiInput::createNewDevice (testDeviceName, &handler));
-             expect (midiInput.get() != nullptr);
-             midiInput->start();
-
-             auto inputInfo = midiInput->getDeviceInfo();
-
-             expect (MidiOutput::getAvailableDevices().contains (inputInfo));
-
-             std::unique_ptr<MidiOutput> midiOutput (MidiOutput::openDevice (midiInput->getIdentifier()));
-             expect (midiOutput.get() != nullptr);
-
-             midiOutput->sendMessageNow (testMessage);
-
-             // Pump the message thread for a bit to allow the message to be delivered
-             MessageManager::getInstance()->runDispatchLoopUntil (100);
-
-             {
-                 const ScopedLock sl (handler.messageLock);
-
-                 expect (handler.messageSource == midiInput.get());
-
-                 expect (handler.messageReceived.getChannel()    == testMessage.getChannel());
-                 expect (handler.messageReceived.getNoteNumber() == testMessage.getNoteNumber());
-                 expect (handler.messageReceived.getVelocity()   == testMessage.getVelocity());
-             }
-
-             midiInput->stop();
-         }
-        #endif
-
-        #endif
-     }
- };
-
- static MidiDevicesUnitTests MidiDevicesUnitTests;
-#endif
 
 } // namespace juce
